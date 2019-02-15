@@ -24,8 +24,19 @@ Module ModuleNode::make(tvm::Map<GlobalVar, Function> global_funcs) {
     n->global_var_map_.Set(kv.first->name_hint, kv.first);
   }
 
-  n->entry_func = GlobalVarNode::make("main");
-  return Module(n);
+  // add checked type for each function
+  auto ret = Module(n);
+  for (const auto& kv : ret->global_var_map_) {
+    auto func = ret->functions.find(kv.second);
+    CHECK(func != ret->functions.end());
+    Function checked_func = InferType((*func).second, ret, kv.second);
+    auto type = checked_func->checked_type();
+    CHECK(type.as<IncompleteTypeNode>() == nullptr);
+    ret->functions.Set(kv.second, checked_func);
+  }
+
+  ret->entry_func = GlobalVarNode::make("main");
+  return ret;
 }
 
 GlobalVar ModuleNode::GetGlobalVar(const std::string& name) {
