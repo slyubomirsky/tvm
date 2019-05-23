@@ -193,22 +193,18 @@ def test_pow():
 
 
 def test_pow_recursion():
-    # this version of pow takes tuple arguments and is recursive so
-    # the gradient will have to differentiate it
+    # this version of pow uses iterate with a tensor argument, so
+    # it will have to differentiate iterate
     mod = relay.Module()
-    pow = relay.GlobalVar('pow')
+    p = Prelude(mod)
+    add_nat_definitions(p)
     shape = (10, 10)
     dtype = 'float32'
     t = relay.TensorType(shape, dtype)
-    x = relay.Var('x', t)
-    p = relay.Var('p', relay.scalar_type('int32'))
-    mod[pow] = relay.Function([x, p],
-                              relay.If(relay.equal(p, relay.const(0)),
-                                       x, pow(x + x, p - relay.const(1))),
-                              t)
+    x = relay.var("x", t)
+    double = relay.Function([x], x + x)
     i = relay.var("i", t)
-    func = relay.Function([i], pow(i, relay.const(3)))
-    print(gradient(func, mod=mod))
+    func = relay.Function([i], p.iterate(double, relay.const(3))(i))
     back_func = relay.ir_pass.infer_type(gradient(func, mod=mod), mod=mod)
     assert back_func.checked_type == relay.FuncType([t], relay.TupleType([t, relay.TupleType([t])]))
     i_nd = rand(dtype, *shape)

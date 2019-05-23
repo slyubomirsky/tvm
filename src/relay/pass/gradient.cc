@@ -82,27 +82,54 @@ Type WithGradientType(const Type& t) {
 struct Deglobalizer : public ExprMutator {
   explicit Deglobalizer(const Module& mod) : mod_(mod) {}
 
-  Expr VisitExpr_(const GlobalVarNode* op) override {
-    // because a global can be recursive, we need to translate the body
-    // into a local function that replaces the global with the correct name
-    auto global = GetRef<GlobalVar>(op);
-    auto body = mod_->Lookup(global);
-    auto local = VarNode::make(global->name_hint, Type(nullptr));
-    std::unordered_map<Expr, Expr, NodeHash, NodeEqual> subst_map;
-    subst_map[global] = local;
-    // have to visit the body after the substitution to get all globals
-    // in case it has more globals in it
-    auto subst = this->VisitExpr(ExprSubst(body, subst_map));
-    return LetNode::make(local, subst, local);
+  std::pair<Expr, Array<GlobalVar>> Deglobalize(const Expr& e) {
+    this->grad_vars = {};
+    this->new_vars = {};
+    auto ret = this->VisitExpr(e);
+    return std::make_pair(ret, this->grad_vars);
   }
 
+  Expr VisitExpr_(const GlobalVarNode* op) override {
+    auto global = GetRef<GlobalVar>(op);
+    auto name = global->name_hint;
+    auto grad_name = name + "_grad";
+
+    // if the global is a grad we added this time, we will not
+    // visit it again
+    if (new_vars.count(name) != 0) {
+      return global;
+    }
+
+    if (new_vars.count(grad_name) == 0) {
+      auto grad_var = GlobalVarNode::make(grad_name);
+      new_vars.insert(grad_var->name_hint);
+      CHECK(new_vars.count(grad_name) != 0);
+      grad_vars.push_back(grad_var);
+      auto body = mod_->Lookup(global);
+      std::unordered_map<Expr, Expr, NodeHash, NodeEqual> subst_map;
+      subst_map[global] = grad_var;
+
+      // the substituted body will not type check because it will
+      // need to be differentiated, hence we add unchecked for now
+      // (it will be checked after differentiating)
+      mod_->AddUnchecked(grad_var,
+                         Downcast<Function>(this->VisitExpr(ExprSubst(body, subst_map))));
+      return grad_var;
+    }
+
+    return mod_->Lookup(grad_name);
+  }
+
+  std::set<std::string> new_vars;
+  Array<GlobalVar> grad_vars;
   const Module& mod_;
 };
 
-//! \brief Inline all global vars in e
-Expr DeGlobal(const Module& mod, const Expr& e) {
+//! \brief Replace all references to globals in e with their gradients,
+// collect in array
+std::pair<Expr, Array<GlobalVar>> DeGlobal(const Module& mod, const Expr& e) {
   Deglobalizer deglobe(mod);
-  return deglobe.VisitExpr(e);
+  return deglobe.Deglobalize(e);
 }
 
 /*! \brief A fragment of the program being built by the automatic differentation
@@ -227,41 +254,55 @@ Type GradRetType(const Function& f) {
   return TupleTypeNode::make({f->ret_type, TupleTypeNode::make(vt)});
 }
 
-Expr FirstOrderGradient(const Expr& re, const Module& mod) {
-  // Currently we first remove any global functions for the first
-  // order case.
-  auto e = DeGlobal(mod, re);
+Function BuildFOGradientFunction(const Expr& e) {
   auto f = e.as<FunctionNode>();
   CHECK(f) << "FOWithGradient expects its argument to be a function: " << f;
   CHECK(f->type_params.size() == 0) << "no polymorphism supported for now";
 
-  // We will then build a sequence of lets which implement reverse mode.
+  // Build a sequence of lets which implement reverse mode.
   Expr body = LetList::With([&](LetList* ll) {
-    FirstOrderReverseAD reverse_ad(ll);
-    ADValue rev = reverse_ad(e);
-    std::vector<ADValue> args;
-    for (const auto& p : f->params) {
-      args.push_back(std::make_shared<ADTensor>(ll, p));
-    }
-    auto c = rev->get<ADFunction>().func(args, Attrs(), {});
-    const auto& res = c->get<ADTensor>();
-    Expr grad = LetList::With([&](LetList* ll) {
-      res.reverse = OnesLike(res.forward);
-      for (auto it = reverse_ad.backprop_actions.rbegin();
-           it != reverse_ad.backprop_actions.rend();
-           ++it) {
-        (*it)(ll);
+      FirstOrderReverseAD reverse_ad(ll);
+      ADValue rev = reverse_ad(e);
+      std::vector<ADValue> args;
+      for (const auto& p : f->params) {
+        args.push_back(std::make_shared<ADTensor>(ll, p));
       }
-      std::vector<Expr> grad_res;
-      for (const auto& a : args) {
-        grad_res.push_back(a->get<ADTensor>().reverse);
-      }
-      return TupleNode::make(grad_res);
+      auto c = rev->get<ADFunction>().func(args, Attrs(), {});
+      const auto& res = c->get<ADTensor>();
+      Expr grad = LetList::With([&](LetList* ll) {
+          res.reverse = OnesLike(res.forward);
+          for (auto it = reverse_ad.backprop_actions.rbegin();
+               it != reverse_ad.backprop_actions.rend();
+               ++it) {
+            (*it)(ll);
+          }
+          std::vector<Expr> grad_res;
+          for (const auto& a : args) {
+            grad_res.push_back(a->get<ADTensor>().reverse);
+          }
+          return TupleNode::make(grad_res);
+        });
+      return Pair(res.forward, grad);
     });
-    return Pair(res.forward, grad);
-  });
 
   return FunctionNode::make(f->params, body, GradRetType(GetRef<Function>(f)), {});
+}
+
+Expr FirstOrderGradient(const Expr& re, const Module& mod) {
+  auto pair = DeGlobal(mod, re);
+  Expr e = pair.first;
+  Array<GlobalVar> global_grads = pair.second;
+
+  auto ret = BuildFOGradientFunction(e);
+
+  // must differentiate the global gradients we found too
+  for (auto global_grad : global_grads) {
+    auto body = mod->Lookup(global_grad);
+    auto grad_body = BuildFOGradientFunction(body);
+    mod->Update(global_grad, grad_body);
+  }
+
+  return ret;
 }
 
 TVM_REGISTER_API("relay._ir_pass.first_order_gradient")
@@ -339,28 +380,45 @@ Expr BPEmpty() {
   return RefCreateNode::make(unitF);
 }
 
-Expr Gradient(const Expr& re, const Module& mod) {
-  auto e = DeGlobal(mod, re);
+Function BuildGradientFunction(const Expr& e) {
   auto f = e.as<FunctionNode>();
   CHECK(f) << "input need to be a function";
   CHECK(f->type_params.size() == 0) << "no polymorphism supported for now";
+
   Expr body = LetList::With([&](LetList* ll) {
-    Var bp = ll->Push(BPEmpty());
-    Expr rev = ReverseAD(bp)(e);
-    std::vector<Expr> args;
-    for (const auto& p : f->params) {
-      args.push_back(ll->Push(Pair(p, RefCreateNode::make(ZerosLike(p)))));
-    }
-    auto c = ll->Push(CallNode::make(rev, args));
-    ll->Push(RefWriteNode::make(GetField(c, 1), OnesLike(GetField(c, 0))));
-    ll->Push(CallNode::make(RefReadNode::make(bp), {}));
-    std::vector<Expr> ret;
-    for (const auto& a : args) {
-      ret.push_back(RefReadNode::make(GetField(a, 1)));
-    }
-    return Pair(GetField(c, 0), TupleNode::make(ret));
-  });
+      Var bp = ll->Push(BPEmpty());
+      Expr rev = ReverseAD(bp)(e);
+      std::vector<Expr> args;
+      for (const auto& p : f->params) {
+        args.push_back(ll->Push(Pair(p, RefCreateNode::make(ZerosLike(p)))));
+      }
+      auto c = ll->Push(CallNode::make(rev, args));
+      ll->Push(RefWriteNode::make(GetField(c, 1), OnesLike(GetField(c, 0))));
+      ll->Push(CallNode::make(RefReadNode::make(bp), {}));
+      std::vector<Expr> ret;
+      for (const auto& a : args) {
+        ret.push_back(RefReadNode::make(GetField(a, 1)));
+      }
+      return Pair(GetField(c, 0), TupleNode::make(ret));
+    });
+
   return FunctionNode::make(f->params, body, GradRetType(GetRef<Function>(f)), {});
+}
+
+Expr Gradient(const Expr& re, const Module& mod) {
+  auto pair = DeGlobal(mod, re);
+  Expr e = pair.first;
+  Array<GlobalVar> global_grads = pair.second;
+  auto ret = BuildGradientFunction(e);
+
+  for (auto global_grad : global_grads) {
+    auto body = mod->Lookup(global_grad->name_hint);
+    auto grad_body = BuildFOGradientFunction(body);
+    mod->Remove(global_grad);
+    mod->Add(global_grad, grad_body);
+  }
+
+  return ret;
 }
 
 TVM_REGISTER_API("relay._ir_pass.gradient")
