@@ -64,7 +64,9 @@ def _convert_recurrent_activation(inexpr, keras_layer):
     return _convert_activation(inexpr, act_type, None, None, None)
 
 
-def _convert_activation(inexpr, keras_layer, _, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_activation(
+        inexpr, keras_layer, _, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     if isinstance(keras_layer, str):
         act_type = keras_layer
     else:
@@ -232,7 +234,9 @@ def _convert_permute(inexpr, keras_layer, _, input_shape=None, data_layout=None)
     return _op.transpose(inexpr, axes=(0,) + keras_layer.dims)
 
 
-def _convert_embedding(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_embedding(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     indices = inexpr
     weightList = keras_layer.get_weights()
     weight = etab.new_const(weightList[0])
@@ -241,7 +245,9 @@ def _convert_embedding(inexpr, keras_layer, etab, input_shape=None, data_layout=
     return out
 
 
-def _convert_dense(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_dense(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     weightList = keras_layer.get_weights()
     weight = etab.new_const(weightList[0].transpose([1, 0]))
     params = {"weight": weight, "units": weightList[0].shape[1]}
@@ -599,7 +605,9 @@ def _convert_separable_convolution(inexpr, keras_layer, etab, input_shape=None, 
     return out
 
 
-def _convert_flatten(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_flatten(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     _check_data_format(keras_layer)
     if data_layout is None:
         data_layout = etab.data_layout
@@ -707,7 +715,9 @@ def _convert_pooling3d(inexpr, keras_layer, etab, input_shape=None, data_layout=
     return _op.transpose(out, axes=(0, 2, 3, 4, 1))
 
 
-def _convert_global_pooling3d(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_global_pooling3d(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     _check_data_format(keras_layer)
     if data_layout is None:
         data_layout = etab.data_layout
@@ -727,7 +737,9 @@ def _convert_global_pooling3d(inexpr, keras_layer, etab, input_shape=None, data_
     return _convert_flatten(out, keras_layer, etab, input_shape, data_layout)
 
 
-def _convert_upsample(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_upsample(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     _check_data_format(keras_layer)
     if data_layout is None:
         data_layout = etab.data_layout
@@ -758,7 +770,9 @@ def _convert_upsample(inexpr, keras_layer, etab, input_shape=None, data_layout=N
     return out
 
 
-def _convert_upsample3d(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_upsample3d(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     _check_data_format(keras_layer)
     if data_layout is None:
         data_layout = etab.data_layout
@@ -773,7 +787,9 @@ def _convert_upsample3d(inexpr, keras_layer, etab, input_shape=None, data_layout
     return out
 
 
-def _convert_cropping(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_cropping(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     _check_data_format(keras_layer)
     crop_type = type(keras_layer).__name__
     if input_shape is None:
@@ -830,7 +846,9 @@ def _convert_batchnorm(inexpr, keras_layer, etab, input_shape=None, data_layout=
     return result
 
 
-def _convert_padding(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_padding(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     _check_data_format(keras_layer)
     if data_layout is None:
         data_layout = etab.data_layout
@@ -907,7 +925,9 @@ def _convert_padding3d(inexpr, keras_layer, etab, input_shape=None, data_layout=
     return out
 
 
-def _convert_concat(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_concat(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     _check_data_format(keras_layer)
     if input_shape is None:
         input_shape = keras_layer.input_shape
@@ -941,7 +961,9 @@ def _convert_reshape(inexpr, keras_layer, etab, input_shape=None, data_layout=No
     return _op.reshape(inexpr, newshape=shape)
 
 
-def _convert_lstm(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_lstm(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     _check_data_format(keras_layer)
     if input_shape is None:
         input_shape = keras_layer.input_shape
@@ -978,7 +1000,9 @@ def _convert_lstm(inexpr, keras_layer, etab, input_shape=None, data_layout=None)
     return [out, next_h, next_c]
 
 
-def _convert_simple_rnn(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_simple_rnn(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     _check_data_format(keras_layer)
     if not isinstance(inexpr, list):
         buf = np.zeros((1, keras_layer.units), "float32")
@@ -1002,7 +1026,9 @@ def _convert_simple_rnn(inexpr, keras_layer, etab, input_shape=None, data_layout
     return [output, output]
 
 
-def _convert_gru(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_gru(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     _check_data_format(keras_layer)
     if not isinstance(inexpr, list):
         buf = np.zeros((1, keras_layer.units), "float32")
@@ -1045,7 +1071,9 @@ def _convert_gru(inexpr, keras_layer, etab, input_shape=None, data_layout=None):
     return [output, output]
 
 
-def _convert_repeat_vector(inexpr, keras_layer, etab, input_shape=None, data_layout=None): # pylint: disable=unused-argument
+def _convert_repeat_vector(
+        inexpr, keras_layer, etab, input_shape=None, data_layout=None
+): # pylint: disable=unused-argument
     if input_shape is None:
         input_shape = keras_layer.input_shape
     input_shape = list(input_shape)
@@ -1073,21 +1101,22 @@ def _convert_time_distributed(inexpr, keras_layer, etab, input_shape=None, data_
 
     # for NDHWC, inner data layout will drop the D
     inner_data_layout = None
-    if data_layout == 'NDHWC':
-        inner_data_layout = 'NHWC'
+    if data_layout == "NDHWC":
+        inner_data_layout = "NHWC"
 
     # some code duplication from keras_op_to_relay
     # but it's useful to avoid cluttering the etab
     inner_layer_op_name = type(keras_layer.layer).__name__
     if inner_layer_op_name not in _convert_map:
         raise tvm.error.OpNotImplemented(
-            ("The inner layer for TimeDistributed {}"
-             + " is not supported for frontend Keras.").format(
+            (
+                "The inner layer for TimeDistributed {} is not supported for frontend Keras."
+            ).format(
                 inner_layer_op_name))
 
     conversion_func = lambda expr: _convert_map[inner_layer_op_name](
-        expr, inner_layer, etab,
-        input_shape=inner_input_shape, data_layout=inner_data_layout)
+        expr, inner_layer, etab, input_shape=inner_input_shape, data_layout=inner_data_layout
+    )
 
     split_dim = input_shape[1]
     split_input = _op.split(inexpr, split_dim, 1)
@@ -1097,22 +1126,23 @@ def _convert_time_distributed(inexpr, keras_layer, etab, input_shape=None, data_
         split_shape[0] = 1
     split_shape[1] = 1
 
-    split_var = new_var('time_distributed_split',
-                        type_annotation=TupleType([
-                            TensorType(split_shape, dtype="float32")
-                            for i in range(split_dim)
-                        ]))
+    split_var = new_var(
+        'time_distributed_split',
+        type_annotation=TupleType(
+            [TensorType(split_shape, dtype="float32") for i in range(split_dim)]
+        ),
+    )
 
     # For each split, squeeze away the second dimension,
     # apply the inner layer.
     # Afterwards, combine the transformed splits back along
     # the second dimension using stack
-    splits = [conversion_func(
-        _op.squeeze(_expr.TupleGetItem(split_var, i), axis=[1]))
-              for i in range(split_dim)]
+    splits = [
+        conversion_func(_op.squeeze(_expr.TupleGetItem(split_var, i), axis=[1]))
+        for i in range(split_dim)
+    ]
 
-    return _expr.Let(split_var, split_input.astuple(),
-                     _op.stack(splits, axis=1))
+    return _expr.Let(split_var, split_input.astuple(), _op.stack(splits, axis=1))
 
 
 def _default_skip(inexpr, keras_layer, _):  # pylint: disable=unused-argument
@@ -1185,7 +1215,7 @@ _convert_map = {
     "SpatialDropout2D": _default_skip,
     "SpatialDropout1D": _default_skip,
     "GaussianDropout": _default_skip,
-    "GaussianNoise": _default_skip
+    "GaussianNoise": _default_skip,
 }
 
 
