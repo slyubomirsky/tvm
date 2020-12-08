@@ -628,13 +628,11 @@ def _convert_pooling(
 
     if pool_type == "GlobalMaxPooling2D":
         return _convert_flatten(
-            _op.nn.global_max_pool2d(inexpr, **global_pool_params),
-            keras_layer, etab, data_layout
+            _op.nn.global_max_pool2d(inexpr, **global_pool_params), keras_layer, etab, data_layout
         )
     if pool_type == "GlobalAveragePooling2D":
         return _convert_flatten(
-            _op.nn.global_avg_pool2d(inexpr, **global_pool_params),
-            keras_layer, etab, data_layout
+            _op.nn.global_avg_pool2d(inexpr, **global_pool_params), keras_layer, etab, data_layout
         )
     pool_h, pool_w = keras_layer.pool_size
     stride_h, stride_w = keras_layer.strides
@@ -1369,8 +1367,9 @@ def from_keras(model, shape=None, layout="NCHW"):
                     inexpr.append(expr)
                 if len(inexpr) == 1:
                     inexpr = inexpr[0]
-                keras_op_to_relay(inexpr, keras_layer, keras_layer.name + ":" + str(node_idx),
-                                  etab, layout)
+                keras_op_to_relay(
+                    inexpr, keras_layer, keras_layer.name + ":" + str(node_idx), etab, layout
+                )
     # model._output_coordinates contains out_node(oc[0]), node_index(oc[1]) and tensor_index(oc[2])
     # Get all output nodes in etab using the name made from above values.
     # The out exprs were added to etab in keras_op_to_relay using this name.
