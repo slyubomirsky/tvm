@@ -158,6 +158,9 @@ class TypeMutator(TypeFunctor):
     def visit_type_var(self, tv):
         return TypeVar(tv.name_hint, tv.kind)
 
+    def visit_global_type_var(self, gtv):
+        return GlobalTypeVar(gtv.name_hint, gtv.kind)
+
     def visit_incomplete_type(self, it):
         return IncompleteType(it.kind)
 

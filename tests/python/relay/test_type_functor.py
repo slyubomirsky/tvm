@@ -20,6 +20,7 @@ from tvm import relay
 from tvm.relay import TypeFunctor, TypeMutator, TypeVisitor
 from tvm.relay.ty import (
     TypeVar,
+    GlobalTypeVar,
     IncompleteType,
     TensorType,
     FuncType,
@@ -48,6 +49,11 @@ def check_visit(typ):
 
 def test_type_var():
     tv = TypeVar("a")
+    check_visit(tv)
+
+
+def test_global_type_var():
+    tv = GlobalTypeVar("a")
     check_visit(tv)
 
 
